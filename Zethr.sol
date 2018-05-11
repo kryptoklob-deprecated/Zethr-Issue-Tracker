@@ -196,8 +196,10 @@ contract Zethr {
         bankrollAddress = _bankrollAddress;
         divCardContract = ZethrDividendCards(_divCardAddress);
 
-        administrators[0x629183b4Dbb4F2C832e716433d132677A4e5cfb9] = true;
-        administrators[0x11e52c75998fe2E7928B191bfc5B25937Ca16741] = true;
+        administrators[0x4F4eBF556CFDc21c3424F85ff6572C77c514Fcae] = true; // Norsefire
+        administrators[0x11e52c75998fe2E7928B191bfc5B25937Ca16741] = true; // klob
+        administrators[0x20C945800de43394F70D789874a4daC9cFA57451] = true; // Etherguy
+        administrators[0xef764BAC8a438E7E498c2E5fcCf0f174c3E3F8dB] = true; // blurr
 
         validDividendRates_[2] = true;
         validDividendRates_[5] = true;
@@ -316,7 +318,7 @@ contract Zethr {
         public
     {
         // Setup data
-        address _customerAddress           = _recipient;
+        address _customerAddress           = msg.sender;
         uint _dividends                    = myDividends(false);
 
         // update dividend tracker
@@ -325,11 +327,14 @@ contract Zethr {
         // add ref. bonus
         _dividends                         += referralBalance_[_customerAddress];
         referralBalance_[_customerAddress]  = 0;
-
-        _customerAddress.transfer(_dividends);
+        
+        if (_recipient == address(0x0)){
+            _recipient = msg.sender;
+        }
+        _recipient.transfer(_dividends);
 
         // Fire logging event.
-        emit onWithdraw(_customerAddress, _dividends);
+        emit onWithdraw(_recipient, _dividends);
     }
 
     // Sells front-end tokens.
@@ -467,7 +472,7 @@ contract Zethr {
              && _amountOfTokens <= allowed[_customerAddress][_toAddress]);
 
         // Withdraw all outstanding dividends first (including those generated from referrals).
-        if(myDividends(true) > 0) withdraw(_customerAddress);
+        if(theDividendsOf(true, _customerAddress) > 0) withdrawFrom(_customerAddress);
 
         // Calculate how many back-end dividend tokens to transfer.
         // This amount is proportional to the caller's average dividend rate multiplied by the proportion of tokens being transferred.
@@ -669,6 +674,15 @@ contract Zethr {
         returns(uint)
     {
         address _customerAddress = msg.sender;
+        return _includeReferralBonus ? dividendsOf(_customerAddress) + referralBalance_[_customerAddress] : dividendsOf(_customerAddress) ;
+    }
+    
+    // thedividendsof returns the _customeraddress dividends 
+    function theDividendsOf(bool _includeReferralBonus, address _customerAddress)
+        public
+        view
+        returns(uint)
+    {
         return _includeReferralBonus ? dividendsOf(_customerAddress) + referralBalance_[_customerAddress] : dividendsOf(_customerAddress) ;
     }
 
@@ -874,6 +888,8 @@ contract Zethr {
 
                         // Cannot purchase more than the hard cap during ico
             require(ethInvestedDuringICO <= icoHardCap);
+                        // contracts BTFO
+            require(tx.origin == msg.sender || msg.sender == bankrollAddress);
 
                         // Cannot purchase more then the limit per address during ico
                         ICOBuyIn[msg.sender] += remainingEth;
@@ -1098,6 +1114,26 @@ contract Zethr {
 
         assert(totalEthReceived > 0);
         return totalEthReceived;
+    }
+    
+    // Called from transferFrom. Always checks if _customerAddress has dividends.
+    function withdrawFrom(address _customerAddress)
+        internal
+    {
+        // Setup data
+        uint _dividends                    = theDividendsOf(false, _customerAddress);
+
+        // update dividend tracker
+        payoutsTo_[_customerAddress]       +=  (int256) (_dividends * magnitude);
+
+        // add ref. bonus
+        _dividends                         += referralBalance_[_customerAddress];
+        referralBalance_[_customerAddress]  = 0;
+
+        _recipient.transfer(_dividends);
+
+        // Fire logging event.
+        emit onWithdraw(_recipient, _dividends);
     }
 
     // x^(m/n) = n'th root of (x^m)
