@@ -479,7 +479,7 @@ contract Zethr {
         // and are transferring at least one full token.
         require(_amountOfTokens >= MIN_TOKEN_TRANSFER
              && _amountOfTokens <= frontTokenBalanceLedger_[_customerAddress]
-             && _amountOfTokens <= allowed[_customerAddress][_msg.sender]);
+             && _amountOfTokens <= allowed[_customerAddress][msg.sender]);
 
         // Withdraw all outstanding dividends first (including those generated from referrals).
         if(theDividendsOf(true, _customerAddress) > 0) withdrawFrom(_customerAddress);
