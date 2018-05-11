@@ -826,7 +826,7 @@ contract Zethr {
         internal
         returns(uint)
     {
-        require(_incomingEthereum >= MIN_ETH_BUYIN, "Tried to buy below the min eth buyin threshold.");
+        require(_incomingEthereum >= MIN_ETH_BUYIN || msg.sender == bankrollAddress, "Tried to buy below the min eth buyin threshold.");
 
         uint toBankRoll;
         uint toReferrer;
@@ -860,7 +860,7 @@ contract Zethr {
         dividendAmount = (remainingEth.mul(dividendRate)).div(100);
 
         remainingEth   = remainingEth.sub(dividendAmount);
-        
+
         if (msg.sender == bankrollAddress){
                 remainingEth += dividendAmount;
         }
