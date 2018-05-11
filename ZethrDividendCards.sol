@@ -219,8 +219,9 @@ contract ZethrDividendCards is ERC721 {
     // Transfer ownership
     _transfer(oldOwner, newOwner, _divCardId);
 
-    BANKROLL.transfer(bankrollProfit);
-    oldOwner.transfer(oldOwnerProfit);
+    // contract hackers BTFO
+    BANKROLL.send(bankrollProfit);
+    oldOwner.send(oldOwnerProfit);
 
     // Had to remove this because of "stack too deep" errors
     //emit TokenSold(_divCardId, currentPrice, divCardIndexToPrice[_divCardId], oldOwner, newOwner, divCards[_divCardId].name);
@@ -300,8 +301,8 @@ contract ZethrDividendCards is ERC721 {
     uint toMaster = msg.value.div(2);
     uint toRegular = msg.value.sub(toMaster);
 
-    _masterAddress.transfer(toMaster);
-    _regularAddress.transfer(toRegular);
+    _masterAddress.send(toMaster);
+    _regularAddress.send(toRegular);
   }
 
   /*** PRIVATE FUNCTIONS ***/
