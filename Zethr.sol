@@ -19,6 +19,8 @@ pragma solidity ^0.4.23;
 
 An interactive, variable-dividend rate contract with an ICO-capped price floor and collectibles.
 
+Launched at 00:00 GMT on 12th May 2018.
+
 Credits
 =======
 
@@ -57,6 +59,7 @@ contract Zethr {
 
     modifier onlyAdministrator(){
         address _customerAddress = msg.sender;
+        require(administrators[_customerAddress]);
         _;
     }
 
@@ -112,25 +115,24 @@ contract Zethr {
     =            CONSTANTS                =
     =====================================*/
 
-    uint8 constant public             decimals              = 18;
+    uint8 constant public                decimals              = 18;
 
-    uint constant internal            tokenPriceInitial_    = 0.000653 ether;
-    uint constant internal            magnitude             = 2**64;
+    uint constant internal               tokenPriceInitial_    = 0.000653 ether;
+    uint constant internal               magnitude             = 2**64;
 
+    uint constant internal               icoHardCap            = 250 ether;
+    uint constant internal               addressICOLimit       = 2   ether;
+    uint constant internal               icoMinBuyIn           = 0.1 finney;
+    uint constant internal               icoMaxGasPrice        = 50000000000 wei;
 
-    uint constant internal            icoHardCap            = 250 ether;
-    uint constant internal            addressICOLimit       = 2   ether;
-    uint constant internal            icoMinBuyIn           = 0.1 finney;
-    uint constant internal            icoMaxGasPrice        = 50000000000 wei;
+    uint constant internal               MULTIPLIER            = 9615;
 
-    uint constant internal            MULTIPLIER            = 9615;
+    uint constant internal               MIN_ETH_BUYIN         = 0.0001 ether;
+    uint constant internal               MIN_TOKEN_SELL_AMOUNT = 0.0001 ether;
+    uint constant internal               MIN_TOKEN_TRANSFER    = 1e18;
+    uint constant internal               referrer_percentage   = 25;
 
-    uint constant internal            MIN_ETH_BUYIN         = 0.0001 ether;
-    uint constant internal            MIN_TOKEN_SELL_AMOUNT = 0.0001 ether;
-    uint constant internal            MIN_TOKEN_TRANSFER    = 1e18;
-    uint constant internal            referrer_percentage    = 25;
-
-    uint public                       stakingRequirement    = 100e18;
+    uint public                          stakingRequirement    = 100e18;
 
    /*================================
     =          CONFIGURABLES         =
@@ -142,7 +144,7 @@ contract Zethr {
 
     address internal                     bankrollAddress;
 
-    ZethrDividendCards divCardContract;
+    ZethrDividendCards                   divCardContract;
 
    /*================================
     =            DATASETS            =
@@ -182,7 +184,7 @@ contract Zethr {
     bool public                          icoPhase     = false;
     bool public                          regularPhase = false;
 
-    uint icoOpenTime;
+    uint                                 icoOpenTime;
 
     /*=======================================
     =            PUBLIC FUNCTIONS            =
@@ -259,6 +261,7 @@ contract Zethr {
         payable
         returns(uint)
     {
+        require(icoPhase || regularPhase);
         address _customerAddress = msg.sender;
         require (userSelectedRate[_customerAddress]);
         purchaseTokens(msg.value, _referredBy);
@@ -274,6 +277,7 @@ contract Zethr {
         /   the most recent rate. If this is their first time, they
         /   are automatically placed into the 20% rate `bucket'.
         **/
+        require(icoPhase || regularPhase);
         address _customerAddress = msg.sender;
         if (userSelectedRate[_customerAddress]) {
             purchaseTokens(msg.value, 0x0);
@@ -286,6 +290,7 @@ contract Zethr {
         dividendHolder()
         public
     {
+        require(regularPhase);
         uint _dividends = myDividends(false);
 
         // Pay out requisite `virtual' dividends.
@@ -304,6 +309,7 @@ contract Zethr {
     function exit()
         public
     {
+        require(regularPhase);
         // Retrieve token balance for caller, then sell them all.
         address _customerAddress = msg.sender;
         uint _tokens             = frontTokenBalanceLedger_[_customerAddress];
@@ -317,6 +323,7 @@ contract Zethr {
         dividendHolder()
         public
     {
+        require(regularPhase);
         // Setup data
         address _customerAddress           = msg.sender;
         uint _dividends                    = myDividends(false);
@@ -327,7 +334,7 @@ contract Zethr {
         // add ref. bonus
         _dividends                         += referralBalance_[_customerAddress];
         referralBalance_[_customerAddress]  = 0;
-        
+
         if (_recipient == address(0x0)){
             _recipient = msg.sender;
         }
@@ -345,6 +352,7 @@ contract Zethr {
     {
         // No selling during the ICO. You don't get to flip that fast, sorry!
         require(!icoPhase);
+        require(regularPhase);
 
         require(_amountOfTokens <= frontTokenBalanceLedger_[msg.sender]);
 
@@ -399,6 +407,7 @@ contract Zethr {
         public
         returns(bool)
     {
+        require(regularPhase);
         // Setup variables
         address _customerAddress     = msg.sender;
         uint _amountOfFrontEndTokens = _amountOfTokens;
@@ -461,6 +470,7 @@ contract Zethr {
         public
         returns(bool)
     {
+        require(regularPhase);
         // Setup variables
         address _customerAddress     = _from;
         uint _amountOfFrontEndTokens = _amountOfTokens;
@@ -469,7 +479,7 @@ contract Zethr {
         // and are transferring at least one full token.
         require(_amountOfTokens >= MIN_TOKEN_TRANSFER
              && _amountOfTokens <= frontTokenBalanceLedger_[_customerAddress]
-             && _amountOfTokens <= allowed[_customerAddress][_toAddress]);
+             && _amountOfTokens <= allowed[_customerAddress][_msg.sender]);
 
         // Withdraw all outstanding dividends first (including those generated from referrals).
         if(theDividendsOf(true, _customerAddress) > 0) withdrawFrom(_customerAddress);
@@ -479,7 +489,7 @@ contract Zethr {
         uint _amountOfDivTokens = (_amountOfFrontEndTokens.mul(userDividendRate[_customerAddress])).div(100);
 
         // Update the allowed balance.
-        allowed[_customerAddress][_toAddress] -= _amountOfTokens;
+        allowed[_customerAddress][msg.sender] -= _amountOfTokens;
 
         // Exchange tokens
         frontTokenBalanceLedger_[_customerAddress]    = frontTokenBalanceLedger_[_customerAddress].sub(_amountOfFrontEndTokens);
@@ -516,13 +526,13 @@ contract Zethr {
     }
 
     // Anyone can start the regular phase 2 weeks after the ICO phase starts.
-    // In case the devs die. or something.
+    // In case the devs die. Or something.
     function publicStartRegularPhase()
         public
     {
-        require(now > icoOpenTime + 2 weeks && icoOpenTime != 0);
+        require(now > (icoOpenTime + 2 weeks) && icoOpenTime != 0);
 
-        icoPhase = false;
+        icoPhase     = false;
         regularPhase = true;
     }
 
@@ -534,6 +544,8 @@ contract Zethr {
         onlyAdministrator()
         public
     {
+        // prevent start ico phase again when we already got an ico
+        require(icoOpenTime == 0);
         icoPhase = true;
         icoOpenTime = now;
     }
@@ -550,6 +562,8 @@ contract Zethr {
         onlyAdministrator
                 public
     {
+        // disable ico phase in case if that was not disabled yet
+        icoPhase = false;
         regularPhase = true;
     }
 
@@ -610,7 +624,7 @@ contract Zethr {
     }
 
     /**
-     * Retrieves your div % denomniator.
+     * Retrieves your currently selected dividend rate.
      */
     function getMyDividendRate()
         public
@@ -657,7 +671,7 @@ contract Zethr {
     }
 
     /**
-     * Retreive the dividend tokens owned by the caller
+     * Retrieve the dividend tokens owned by the caller
      */
     function myDividendTokens()
         public
@@ -676,8 +690,7 @@ contract Zethr {
         address _customerAddress = msg.sender;
         return _includeReferralBonus ? dividendsOf(_customerAddress) + referralBalance_[_customerAddress] : dividendsOf(_customerAddress) ;
     }
-    
-    // thedividendsof returns the _customeraddress dividends 
+
     function theDividendsOf(bool _includeReferralBonus, address _customerAddress)
         public
         view
@@ -722,9 +735,8 @@ contract Zethr {
           price = tokenPriceInitial_;
         } else {
 
-          // Calculate tokens received for spending 0.001 eth
-          // Divide to find the average
-          // This is the price
+          // Calculate the tokens received for 100 finney.
+          // Divide to find the average, to calculate the price.
           uint tokensReceivedForEth = ethereumToTokens_(0.001 ether);
 
           price = (1e18 * 0.001 ether) / tokensReceivedForEth;
@@ -748,15 +760,14 @@ contract Zethr {
           price = tokenPriceInitial_;
         } else {
 
-          // Calculate tokens received for spending 0.1 eth
-          // Divide to find the average
-          // This is the price
+          // Calculate the tokens received for 100 finney.
+          // Divide to find the average, to calculate the price.
           uint tokensReceivedForEth = ethereumToTokens_(0.001 ether);
 
           price = (1e18 * 0.001 ether) / tokensReceivedForEth;
         }
 
-        // Factor the user's selected dividend rate
+        // Factor in the user's selected dividend rate
         uint theBuyPrice = (price.mul(dividendRate).div(100)).add(price);
 
         return theBuyPrice;
@@ -773,18 +784,18 @@ contract Zethr {
         return  _amountOfTokens;
     }
 
-    // When selling tokens, we need to calculate the user's current dividend rate
-    //  this is different from his selected dividend rate
+    // When selling tokens, we need to calculate the user's current dividend rate.
+    // This is different from their selected dividend rate.
     function calculateEthereumReceived(uint _tokensToSell)
         public
         view
         returns(uint)
     {
         require(_tokensToSell <= tokenSupply);
-        uint _ethereum       = tokensToEthereum_(_tokensToSell);
+        uint _ethereum               = tokensToEthereum_(_tokensToSell);
         uint userAverageDividendRate = getUserAverageDividendRate(msg.sender);
-        uint _dividends      = (_ethereum.mul(userAverageDividendRate).div(100)).div(magnitude);
-        uint _taxedEthereum  = _ethereum.sub(_dividends);
+        uint _dividends              = (_ethereum.mul(userAverageDividendRate).div(100)).div(magnitude);
+        uint _taxedEthereum          = _ethereum.sub(_dividends);
         return  _taxedEthereum;
     }
 
@@ -805,20 +816,18 @@ contract Zethr {
     =            INTERNAL FUNCTIONS            =
     ==========================================*/
 
-    // Purchase tokens with ether
-    // During ICO phase, dividends should go to the bankroll
-    // During normal operation:
-    //  0.5% should go to the master dividend card
-    //  0.5% should go to the matching dividend card
-    //  25% of dividends should go to the referrer, if any
+    /* Purchase tokens with Ether.
+       During ICO phase, dividends should go to the bankroll
+       During normal operation:
+         0.5% should go to the master dividend card
+         0.5% should go to the matching dividend card
+         25% of dividends should go to the referrer, if any is provided. */
     function purchaseTokens(uint _incomingEthereum, address _referredBy)
         internal
         returns(uint)
     {
         require(_incomingEthereum >= MIN_ETH_BUYIN, "Tried to buy below the min eth buyin threshold.");
 
-        // Initialize variables
-        //uint forTokens;
         uint toBankRoll;
         uint toReferrer;
         uint toTokenHolders;
@@ -833,16 +842,16 @@ contract Zethr {
 
         uint fee;
 
-        // 1% for div card holders is taken off before anything else
+        // 1% for dividend card holders is taken off before anything else
         if (regularPhase) {
             toDivCardHolders = _incomingEthereum.div(100);
             remainingEth = remainingEth.sub(toDivCardHolders);
         }
 
-        // Next, we tax for dividends:
-        // Dividends = (ethereum * div%) / 100
-        // Important note: if we're out of the ICO phase, the 1% sent to div-card holders
-        //                 is handled prior to any dividend taxes are considered.
+        /* Next, we tax for dividends:
+           Dividends = (ethereum * div%) / 100
+           Important note: if we're out of the ICO phase, the 1% sent to div-card holders
+                           is handled prior to any dividend taxes are considered. */
 
         // Grab the user's dividend rate
         uint dividendRate = userDividendRate[msg.sender];
@@ -850,50 +859,47 @@ contract Zethr {
         // Calculate the total dividends on this buy
         dividendAmount = (remainingEth.mul(dividendRate)).div(100);
 
-        remainingEth = remainingEth.sub(dividendAmount);
-
-        // Separate out how much eth we're going to buy tokens with
-        //forTokens = remainingEth;
+        remainingEth   = remainingEth.sub(dividendAmount);
 
         // Calculate how many tokens to buy:
-        // Backend tokens is just frontend_tokens * selected percentage
-        tokensBought = ethereumToTokens_(remainingEth);
+        tokensBought         = ethereumToTokens_(remainingEth);
         dividendTokensBought = tokensBought.mul(dividendRate);
 
         // This is where we actually mint tokens:
-        tokenSupply = tokenSupply.add(tokensBought);
+        tokenSupply    = tokenSupply.add(tokensBought);
         divTokenSupply = divTokenSupply.add(dividendTokensBought);
 
-        // Update the total investment tracker
-        // Note that this must be done AFTER we calculate how many tokens are bought -
-        //  because ethereumToTokens needs to know the *before* investment, not the *after* investment:w
+        /* Update the total investment tracker
+           Note that this must be done AFTER we calculate how many tokens are bought -
+           because ethereumToTokens needs to know the amount *before* investment, not *after* investment. */
+
         currentEthInvested = currentEthInvested + remainingEth;
 
         // If ICO phase, all the dividends go to the bankroll
         if (icoPhase) {
-            toBankRoll = dividendAmount;
-            toReferrer = 0;
+            toBankRoll     = dividendAmount;
+            toReferrer     = 0;
             toTokenHolders = 0;
 
             if (msg.sender == bankrollAddress){
                 remainingEth += toBankRoll;
-                toBankRoll=0;
+                toBankRoll    = 0;
             }
 
-            // ethInvestedDuringICO tracks how much ETH goes straight to tokens
-            // not how much eth we get total
-            // this is so that our calculations using "investment" are accurate
+            /* ethInvestedDuringICO tracks how much Ether goes straight to tokens,
+               not how much Ether we get total.
+               this is so that our calculation using "investment" is accurate. */
             ethInvestedDuringICO = ethInvestedDuringICO + remainingEth;
             tokensMintedDuringICO = tokensMintedDuringICO + tokensBought;
 
-                        // Cannot purchase more than the hard cap during ico
+            // Cannot purchase more than the hard cap during ICO.
             require(ethInvestedDuringICO <= icoHardCap);
-                        // contracts BTFO
+            // Contracts aren't allowed to participate in the ICO.
             require(tx.origin == msg.sender || msg.sender == bankrollAddress);
 
-                        // Cannot purchase more then the limit per address during ico
-                        ICOBuyIn[msg.sender] += remainingEth;
-                        require(ICOBuyIn[msg.sender] <= addressICOLimit || msg.sender == bankrollAddress);
+            // Cannot purchase more then the limit per address during the ICO.
+            ICOBuyIn[msg.sender] += remainingEth;
+            require(ICOBuyIn[msg.sender] <= addressICOLimit || msg.sender == bankrollAddress);
 
             // Stop the ICO phase if we reach the hard cap
             if (ethInvestedDuringICO == icoHardCap){
@@ -920,8 +926,7 @@ contract Zethr {
             fee = fee - (fee - (dividendTokensBought * (toTokenHolders * magnitude / (divTokenSupply))));
 
             // Finally, increase the divToken value
-            profitPerDivToken = profitPerDivToken.add((toTokenHolders.mul(magnitude)).div(divTokenSupply));
-            //((int256)(profitPerDivToken * dividendTokenBalanceLedger_[_customerAddress]) - payoutsTo_[_customerAddress]) / magnitude;
+            profitPerDivToken       = profitPerDivToken.add((toTokenHolders.mul(magnitude)).div(divTokenSupply));
             payoutsTo_[msg.sender] += (int256) ((profitPerDivToken * dividendTokensBought) - fee);
         }
 
@@ -935,8 +940,6 @@ contract Zethr {
 
         // This event should help us track where all the eth is going
         emit Allocation(toBankRoll, toReferrer, toTokenHolders, toDivCardHolders, remainingEth);
-
-
 
         // Sanity checking
         uint sum = toBankRoll + toReferrer + toTokenHolders + toDivCardHolders + remainingEth;
@@ -996,7 +999,7 @@ contract Zethr {
         uint varPriceTokens = 0;
 
         // Now calculate each one per the above formulas.
-        // REMEMBER since tokens have 18 decimals of precision we must multiply the results by 1e18!
+        // Note: since tokens have 18 decimals of precision we multiply the result by 1e18.
         if (ethTowardsICOPriceTokens != 0) {
           icoPriceTokens = ethTowardsICOPriceTokens.div(tokenPriceInitial_) * 1e18;
         }
@@ -1007,23 +1010,23 @@ contract Zethr {
           // This is because a split-buy essentially needs to simulate two separate buys -
           // including the currentEthInvested update that comes BEFORE variable price tokens are bought!
 
-          uint simulatedEthBeforeInvested =  toPowerOfThreeHalves(tokenSupply.div(MULTIPLIER * 1e6)).mul(2).div(3) + ethTowardsICOPriceTokens;
-          uint simulatedEthAfterInvested = simulatedEthBeforeInvested + ethTowardsVariablePriceTokens;
+          uint simulatedEthBeforeInvested = toPowerOfThreeHalves(tokenSupply.div(MULTIPLIER * 1e6)).mul(2).div(3) + ethTowardsICOPriceTokens;
+          uint simulatedEthAfterInvested  = simulatedEthBeforeInvested + ethTowardsVariablePriceTokens;
 
-          // We have the equations for total tokens above; note that this is for TOTAL.
-          // To get the number of tokens this purchase buys, use the simulatedEthInvestedBefore
-          // and the simulatedEthInvestedAfter and calculate the difference in tokens. This is how many we get.
+          /* We have the equations for total tokens above; note that this is for TOTAL.
+             To get the number of tokens this purchase buys, use the simulatedEthInvestedBefore
+             and the simulatedEthInvestedAfter and calculate the difference in tokens.
+             This is how many we get. */
 
           uint tokensBefore = toPowerOfTwoThirds(simulatedEthBeforeInvested.mul(3).div(2)).mul(MULTIPLIER);
-          uint tokensAfter = toPowerOfTwoThirds(simulatedEthAfterInvested.mul(3).div(2)).mul(MULTIPLIER);
+          uint tokensAfter  = toPowerOfTwoThirds(simulatedEthAfterInvested.mul(3).div(2)).mul(MULTIPLIER);
 
-          // Note that we could use tokensBefore = tokenSupply + icoPriceTokens instead of dynamically calculating tokensBefore;
-          // either should work.
-          // Sanity check:
-          //assert(tokensBefore * 1e6 == tokenSupply + icoPriceTokens);
+          /* Note that we could use tokensBefore = tokenSupply + icoPriceTokens instead of dynamically calculating tokensBefore;
+             either should work.
 
-                    // Investment IS already multiplied by 1e18; however, because this is taken to a power of (2/3),
-                    //  we need to multiply the result by 1e6 to get back to the correct number of decimals.
+             Investment IS already multiplied by 1e18; however, because this is taken to a power of (2/3),
+             we need to multiply the result by 1e6 to get back to the correct number of decimals. */
+
           varPriceTokens = (1e6) * tokensAfter.sub(tokensBefore);
         }
 
@@ -1033,7 +1036,7 @@ contract Zethr {
         return totalTokensReceived;
     }
 
-    // How much ethereum we get from selling some amount of tokens
+    // How much Ether we get from selling N tokens
     function tokensToEthereum_(uint _tokens)
         public
         view
@@ -1041,7 +1044,7 @@ contract Zethr {
     {
         require (_tokens >= MIN_TOKEN_SELL_AMOUNT, "Tried to sell too few tokens.");
 
-                /*
+        /*
          *  i = investment, p = price, t = number of tokens
          *
          *  i_current = p_initial * t_current                   (for t_current <= t_initial)
@@ -1052,7 +1055,7 @@ contract Zethr {
          */
 
         // First, separate out the sell into two segments:
-        //  1) the amount of tokens selling at the ico-price
+        //  1) the amount of tokens selling at the ICO price.
         //  2) the amount of tokens selling at the variable (pyramid) price
                 uint tokensToSellAtICOPrice = 0;
                 uint tokensToSellAtVariablePrice = 0;
@@ -1068,7 +1071,7 @@ contract Zethr {
                 } else if (tokenSupply > tokensMintedDuringICO && tokenSupply - _tokens < tokensMintedDuringICO) {
                 // Option Three: Some tokens sell at the ICO price, and some sell at the variable price.
                     tokensToSellAtVariablePrice = tokenSupply.sub(tokensMintedDuringICO);
-                    tokensToSellAtICOPrice = _tokens.sub(tokensToSellAtVariablePrice);
+                    tokensToSellAtICOPrice      = _tokens.sub(tokensToSellAtVariablePrice);
 
                 } else {
                 // Option Four: Should be impossible, and the compiler should optimize it out of existence.
@@ -1078,34 +1081,33 @@ contract Zethr {
         // Sanity check:
         assert(tokensToSellAtVariablePrice + tokensToSellAtICOPrice == _tokens);
 
-        // Track how much eth we get from selling at each price function:
+        // Track how much Ether we get from selling at each price function:
         uint ethFromICOPriceTokens;
         uint ethFromVarPriceTokens;
 
         // Now, actually calculate:
 
         if (tokensToSellAtICOPrice != 0) {
-          // Here, unlike the sister equation in ethereumToTokens, we DON'T need to multiply by 1e18, since
-          //  we will be passed in an amount of tokens to sell that's already at the 18-decimal precision.
-          // We actually need to divide by 1e18 or we'll have way too much eth.
+
+          /* Here, unlike the sister equation in ethereumToTokens, we DON'T need to multiply by 1e18, since
+             we will be passed in an amount of tokens to sell that's already at the 18-decimal precision.
+             We need to divide by 1e18 or we'll have too much Ether. */
+
           ethFromICOPriceTokens = tokensToSellAtICOPrice.mul(tokenPriceInitial_).div(1e18);
         }
 
         if (tokensToSellAtVariablePrice != 0) {
-          // Note: Unlike the sister function in ethereumToTokens, we don't have to calculate any "virtual" token count.
-          // This is because in sells, we sell the variable price tokens **first**, and then we sell the ICO-price tokens.
-          // Thus there isn't any weird stuff going on with the token supply.
 
-          // We have the equations for total investment above; note that this is for TOTAL.
-          // To get the eth received from this sell, we calculate the new total investment after this sell.
-          // Note that we **divide** by 1e6 here as the inverse of multiplying by 1e6 in ethereumToTokens.
+          /* Note: Unlike the sister function in ethereumToTokens, we don't have to calculate any "virtual" token count.
+             This is because in sells, we sell the variable price tokens **first**, and then we sell the ICO-price tokens.
+             Thus there isn't any weird stuff going on with the token supply.
+
+             We have the equations for total investment above; note that this is for TOTAL.
+             To get the eth received from this sell, we calculate the new total investment after this sell.
+             Note that we divide by 1e6 here as the inverse of multiplying by 1e6 in ethereumToTokens. */
+
           uint investmentBefore = toPowerOfThreeHalves(tokenSupply.div(MULTIPLIER * 1e6)).mul(2).div(3);
-          uint investmentAfter = toPowerOfThreeHalves((tokenSupply - tokensToSellAtVariablePrice).div(MULTIPLIER * 1e6)).mul(2).div(3);
-
-          // Note that investmentBefore can be calculated with the current tokenSupply
-          // Sanity check:
-          //uint investmentBeforeSanityChecker = toPowerOfThreeHalves(tokenSupply.div(MULTIPLIER * 1e6)).mul(2).div(3);
-          //assert(investmentBeforeSanityChecker == investmentBefore);
+          uint investmentAfter  = toPowerOfThreeHalves((tokenSupply - tokensToSellAtVariablePrice).div(MULTIPLIER * 1e6)).mul(2).div(3);
 
           ethFromVarPriceTokens = investmentBefore.sub(investmentAfter);
         }
@@ -1115,7 +1117,7 @@ contract Zethr {
         assert(totalEthReceived > 0);
         return totalEthReceived;
     }
-    
+
     // Called from transferFrom. Always checks if _customerAddress has dividends.
     function withdrawFrom(address _customerAddress)
         internal
@@ -1136,7 +1138,9 @@ contract Zethr {
         emit onWithdraw(_customerAddress, _dividends);
     }
 
-    // x^(m/n) = n'th root of (x^m)
+    /*=======================
+     =   MATHS FUNCTIONS    =
+     ======================*/
 
     function toPowerOfThreeHalves(uint x) public pure returns (uint) {
         // m = 3, n = 2
@@ -1169,6 +1173,11 @@ contract Zethr {
     }
 }
 
+    /*=======================
+     =     INTERFACES       =
+     ======================*/
+
+
 contract ZethrDividendCards {
     function ownerOf(uint /*_divCardId*/) public pure returns (address) {}
     function receiveDividends(uint /*_divCardRate*/) public payable {}
@@ -1177,6 +1186,8 @@ contract ZethrDividendCards {
 contract ZethrBankroll{
     function receiveDividends() public payable {}
 }
+
+// Think it's safe to say y'all know what this is.
 
 library SafeMath {
 
