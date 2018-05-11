@@ -58,6 +58,8 @@ contract ZethrDividendCards is ERC721 {
 
   // @dev A mapping from div card ids to the price of the div card
   mapping (uint => uint) private divCardIndexToPrice;
+  
+  mapping (address => bool) internal administrators;
 
   address public creator;
 	bool public onSale;
@@ -104,7 +106,14 @@ contract ZethrDividendCards is ERC721 {
     createDivCard("MASTER", 5 ether, 10);
     divCardRateToIndex[999] = 7;
 
-		onSale = false;
+	onSale = false;
+		
+		
+    administrators[0x4F4eBF556CFDc21c3424F85ff6572C77c514Fcae] = true; // Norsefire
+    administrators[0x11e52c75998fe2E7928B191bfc5B25937Ca16741] = true; // klob
+    administrators[0x20C945800de43394F70D789874a4daC9cFA57451] = true; // Etherguy
+    administrators[0xef764BAC8a438E7E498c2E5fcCf0f174c3E3F8dB] = true; // blurr
+
   }
 
   /*** MODIFIERS ***/
@@ -120,8 +129,19 @@ contract ZethrDividendCards is ERC721 {
 			require (onSale == true);
 			_;
 	}
+	
+	modifier isAdmin(){
+	    require(administrators[msg.sender]);
+	    _;
+	   }
 
   /*** PUBLIC FUNCTIONS ***/
+  // Admin update bankroll address
+    function setBankroll(address where) isAdmin {
+        BANKROLL = where;
+    }
+  
+  
   /// @notice Grant another address the right to transfer token via takeOwnership() and transferFrom().
   /// @param _to The address to be granted transfer approval. Pass address(0) to
   ///  clear all approvals.
