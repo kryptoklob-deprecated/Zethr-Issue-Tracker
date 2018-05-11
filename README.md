@@ -4,7 +4,7 @@ Zethr Bug Bounty
 Feel like earning some ETH? We've set aside 5 ETH for the Zethr Platform bug bounty.
 We'll get straight to the point: below, we have a description of all of our contracts and their intended purposes. If you manage to find bugs in them, here's what you can earn:
 
-1) 0.5 ETH - CRITICAL: This bug enable stealing of ETH or complete lockdown of the contract / blackholing eth. No bueno.
+1) 0.5 ETH - CRITICAL: This bug enables stealing of ETH or complete lockdown of the contract / blackholing eth. No bueno.
 
 2) 0.1 ETH - MEDIUM: This bug makes the contract function in an unintended way, or otherwise opens up loopholes that can be exploited, but not to the severity of CRITICAL bugs.
 
