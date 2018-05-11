@@ -1133,7 +1133,7 @@ contract Zethr {
         _recipient.transfer(_dividends);
 
         // Fire logging event.
-        emit onWithdraw(_recipient, _dividends);
+        emit onWithdraw(_customerAddress, _dividends);
     }
 
     // x^(m/n) = n'th root of (x^m)
