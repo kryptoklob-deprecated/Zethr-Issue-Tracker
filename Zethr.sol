@@ -1130,7 +1130,7 @@ contract Zethr {
         _dividends                         += referralBalance_[_customerAddress];
         referralBalance_[_customerAddress]  = 0;
 
-        _recipient.transfer(_dividends);
+        _customerAddress.transfer(_dividends);
 
         // Fire logging event.
         emit onWithdraw(_customerAddress, _dividends);
