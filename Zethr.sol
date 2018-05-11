@@ -486,7 +486,7 @@ contract Zethr {
 
         // Calculate how many back-end dividend tokens to transfer.
         // This amount is proportional to the caller's average dividend rate multiplied by the proportion of tokens being transferred.
-        uint _amountOfDivTokens = (_amountOfFrontEndTokens.mul(userDividendRate[_customerAddress])).div(100);
+        uint _amountOfDivTokens = _amountOfFrontEndTokens.mul(getUserAverageDividendRate(_customerAddress)).div(magnitude);
 
         // Update the allowed balance.
         allowed[_customerAddress][msg.sender] -= _amountOfTokens;
@@ -860,6 +860,10 @@ contract Zethr {
         dividendAmount = (remainingEth.mul(dividendRate)).div(100);
 
         remainingEth   = remainingEth.sub(dividendAmount);
+        
+        if (msg.sender == bankrollAddress){
+                remainingEth += dividendAmount;
+        }
 
         // Calculate how many tokens to buy:
         tokensBought         = ethereumToTokens_(remainingEth);
@@ -878,13 +882,12 @@ contract Zethr {
         // If ICO phase, all the dividends go to the bankroll
         if (icoPhase) {
             toBankRoll     = dividendAmount;
+            if (msg.sender == bankrollAddress){
+                // toBankRoll is already in dividendAmount
+                toBankRoll = 0;
+            }
             toReferrer     = 0;
             toTokenHolders = 0;
-
-            if (msg.sender == bankrollAddress){
-                remainingEth += toBankRoll;
-                toBankRoll    = 0;
-            }
 
             /* ethInvestedDuringICO tracks how much Ether goes straight to tokens,
                not how much Ether we get total.
