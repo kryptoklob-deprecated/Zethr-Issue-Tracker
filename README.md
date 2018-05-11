@@ -38,5 +38,5 @@ Dividend cards should only be activated when an administrator start them.
 
 ## Zethr Bankroll
 
-The bankroll is the standard multisig contract with some additions. In addition to rodinary multisig, it should allow whitelisting of contracts that can pull ETH from it. The bankroll is mostly a stub, as we will be adding functionality to it - most important is that we should be able to change the bankroll address for Zethr.
+The bankroll is the standard multisig contract with some additions. In addition to ordinary multisig, it should allow whitelisting of contracts that can pull ETH from it. The bankroll is mostly a stub, as we will be adding functionality to it - most important is that we should be able to change the bankroll address for Zethr.
 
