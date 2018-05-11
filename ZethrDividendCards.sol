@@ -1,8 +1,49 @@
 pragma solidity ^0.4.23;
 
-// ERC721
+/**
+
+                                  ███████╗███████╗████████╗██╗  ██╗██████╗
+                                  ╚══███╔╝██╔════╝╚══██╔══╝██║  ██║██╔══██╗
+                                    ███╔╝ █████╗     ██║   ███████║██████╔╝
+                                   ███╔╝  ██╔══╝     ██║   ██╔══██║██╔══██╗
+                                  ███████╗███████╗   ██║   ██║  ██║██║  ██║
+                                  ╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+
+.------..------..------..------..------..------..------..------.     .------..------..------..------..------.
+|D.--. ||I.--. ||V.--. ||I.--. ||D.--. ||E.--. ||N.--. ||D.--. |.-.  |C.--. ||A.--. ||R.--. ||D.--. ||S.--. |
+| :/\: || (\/) || :(): || (\/) || :/\: || (\/) || :(): || :/\: ((5)) | :/\: || (\/) || :(): || :/\: || :/\: |
+| (__) || :\/: || ()() || :\/: || (__) || :\/: || ()() || (__) |'-.-.| :\/: || :\/: || ()() || (__) || :\/: |
+| '--'D|| '--'I|| '--'V|| '--'I|| '--'D|| '--'E|| '--'N|| '--'D| ((1)) '--'C|| '--'A|| '--'R|| '--'D|| '--'S|
+`------'`------'`------'`------'`------'`------'`------'`------'  '-'`------'`------'`------'`------'`------'
+
+An interactive, variable-dividend rate contract with an ICO-capped price floor and collectibles.
+This contract describes those collectibles. Don't get left with a hot potato!
+
+Launched at 00:00 GMT on 12th May 2018.
+
+Credits
+=======
+
+Analysis:
+    blurr
+    Randall
+
+Contract Developers:
+    Etherguy
+    klob
+    Norsefire
+
+Front-End Design:
+    cryptodude
+    oguzhanox
+    TropicalRogue
+
+**/
+
+// Required ERC721 interface.
+
 contract ERC721 {
-  // Required methods
+
   function approve(address _to, uint _tokenId) public;
   function balanceOf(address _owner) public view returns (uint balance);
   function implementsERC721() public pure returns (bool);
@@ -14,6 +55,7 @@ contract ERC721 {
 
   event Transfer(address indexed from, address indexed to, uint tokenId);
   event Approval(address indexed owner, address indexed approved, uint tokenId);
+  
 }
 
 contract ZethrDividendCards is ERC721 {
@@ -21,50 +63,56 @@ contract ZethrDividendCards is ERC721 {
 
   /*** EVENTS ***/
 
-  /// @dev The Birth event is fired whenever a new richtoken comes into existence.
+  /// @dev The Birth event is fired whenever a new dividend card comes into existence.
   event Birth(uint tokenId, string name, address owner);
 
-  /// @dev The TokenSold event is fired whenever a token is sold.
+  /// @dev The TokenSold event is fired whenever a token (dividend card, in this case) is sold.
   event TokenSold(uint tokenId, uint oldPrice, uint newPrice, address prevOwner, address winner, string name);
 
   /// @dev Transfer event as defined in current draft of ERC721.
-  ///  ownership is assigned, including births.
+  ///  Ownership is assigned, including births.
   event Transfer(address from, address to, uint tokenId);
 
   /*** CONSTANTS ***/
 
   /// @notice Name and symbol of the non fungible token, as defined in ERC721.
-  string public constant NAME = "ZethrDividendCard";
-  string public constant SYMBOL = "ZDC";
-  address public BANKROLL;
+  string public constant NAME           = "ZethrDividendCard";
+  string public constant SYMBOL         = "ZDC";
+  address public         BANKROLL;
 
   /*** STORAGE ***/
 
-  /// @dev A mapping from div card IDs to the address that owns them. All div cards have
-  ///  some valid owner address.
-  mapping (uint => address) public divCardIndexToOwner;
-
-  // A mapping from div card RATE to index
-  mapping (uint => uint) public divCardRateToIndex;
-
-  // @dev A mapping from owner address to count of div cards that address owns.
-  //  Used internally inside balanceOf() to resolve ownership count.
-  mapping (address => uint) private ownershipDivCardCount;
-
-  /// @dev A mapping from divCardIDs to an address that has been approved to call
-  ///  transferFrom(). Each divCard can only have one approved address for transfer
-  ///  at any time. A zero value means no approval is outstanding.
-  mapping (uint => address) public divCardIndexToApproved;
-
-  // @dev A mapping from div card ids to the price of the div card
-  mapping (uint => uint) private divCardIndexToPrice;
+  /// @dev A mapping from dividend card indices to the address that owns them.
+  ///  All dividend cards have a valid owner address.
   
-  mapping (address => bool) internal administrators;
+  mapping (uint => address) public      divCardIndexToOwner;
 
-  address public creator;
-	bool public onSale;
+  // A mapping from a dividend rate to the card index.
+  
+  mapping (uint => uint) public         divCardRateToIndex;
+
+  // @dev A mapping from owner address to the number of dividend cards that address owns.  
+  //  Used internally inside balanceOf() to resolve ownership count.
+  
+  mapping (address => uint) private     ownershipDivCardCount;
+
+  /// @dev A mapping from dividend card indices to an address that has been approved to call
+  ///  transferFrom(). Each dividend card can only have one approved address for transfer
+  ///  at any time. A zero value means no approval is outstanding.
+  
+  mapping (uint => address) public      divCardIndexToApproved;
+
+  // @dev A mapping from dividend card indices to the price of the dividend card.
+  
+  mapping (uint => uint) private        divCardIndexToPrice;
+  
+  mapping (address => bool) internal    administrators;
+
+  address public                        creator;
+  bool    public                        onSale;
 
   /*** DATATYPES ***/
+  
   struct Card {
     string name;
     uint percentIncrease;
@@ -76,7 +124,6 @@ contract ZethrDividendCards is ERC721 {
     require(msg.sender == creator);
     _;
   }
-
 
   constructor (address _bankroll) public {
     creator = msg.sender;
@@ -106,8 +153,7 @@ contract ZethrDividendCards is ERC721 {
     createDivCard("MASTER", 5 ether, 10);
     divCardRateToIndex[999] = 7;
 
-	onSale = false;
-		
+	onSale = false;		
 		
     administrators[0x4F4eBF556CFDc21c3424F85ff6572C77c514Fcae] = true; // Norsefire
     administrators[0x11e52c75998fe2E7928B191bfc5B25937Ca16741] = true; // klob
@@ -118,36 +164,43 @@ contract ZethrDividendCards is ERC721 {
 
   /*** MODIFIERS ***/
 
-  // Modifier to prevent contracts from interacting with the flip cards
-  modifier isNotContract() {
-      require (AddressUtils.isContract(msg.sender) == false);
-      _;
-  }
+    // Modifier to prevent contracts from interacting with the flip cards
+    modifier isNotContract()
+    {
+        require (AddressUtils.isContract(msg.sender) == false);
+        _;
+    }
 
 	// Modifier to prevent purchases before we open them up to everyone
-	modifier hasStarted() {
-			require (onSale == true);
-			_;
+	modifier hasStarted()
+    {
+		require (onSale == true);
+		_;
 	}
 	
-	modifier isAdmin(){
+	modifier isAdmin()
+    {
 	    require(administrators[msg.sender]);
 	    _;
-	   }
+    }
 
   /*** PUBLIC FUNCTIONS ***/
-  // Admin update bankroll address
-    function setBankroll(address where) isAdmin {
+  // Administrative update of the bankroll contract address
+    function setBankroll(address where)
+        isAdmin 
+    {
         BANKROLL = where;
     }
-  
-  
+    
   /// @notice Grant another address the right to transfer token via takeOwnership() and transferFrom().
   /// @param _to The address to be granted transfer approval. Pass address(0) to
   ///  clear all approvals.
   /// @param _tokenId The ID of the Token that can be transferred if this call succeeds.
   /// @dev Required for ERC-721 compliance.
-  function approve(address _to, uint _tokenId) public isNotContract {
+  function approve(address _to, uint _tokenId)
+    public 
+    isNotContract 
+  {
     // Caller must own token.
     require(_owns(msg.sender, _tokenId));
 
@@ -159,52 +212,82 @@ contract ZethrDividendCards is ERC721 {
   /// For querying balance of a particular account
   /// @param _owner The address for balance query
   /// @dev Required for ERC-721 compliance.
-  function balanceOf(address _owner) public view returns (uint balance) {
+  function balanceOf(address _owner)
+    public 
+    view 
+    returns (uint balance)
+  {
     return ownershipDivCardCount[_owner];
   }
 
   // Creates a div card with bankroll as the owner
-  function createDivCard(string _name, uint _price, uint _percentIncrease) public onlyCreator {
+  function createDivCard(string _name, uint _price, uint _percentIncrease)
+    public
+    onlyCreator
+  {
     _createDivCard(_name, BANKROLL, _price, _percentIncrease);
   }
 
-	// Opens the div cards up for sale
-
-	function startCardSale() public onlyCreator {
+	// Opens the dividend cards up for sale.
+	function startCardSale()
+        public
+        onlyCreator
+    {
 		onSale = true;
 	}
 
   /// @notice Returns all the relevant information about a specific div card
   /// @param _divCardId The tokenId of the div card of interest.
-  function getDivCard(uint _divCardId) public view returns (string divCardName, uint sellingPrice, address owner) {
+  function getDivCard(uint _divCardId)
+    public
+    view
+    returns (string divCardName, uint sellingPrice, address owner)
+  {
     Card storage divCard = divCards[_divCardId];
     divCardName = divCard.name;
     sellingPrice = divCardIndexToPrice[_divCardId];
     owner = divCardIndexToOwner[_divCardId];
   }
 
-  function implementsERC721() public pure returns (bool) {
+  function implementsERC721()
+    public
+    pure
+    returns (bool)
+  {
     return true;
   }
 
   /// @dev Required for ERC-721 compliance.
-  function name() public pure returns (string) {
+  function name()
+    public
+    pure
+    returns (string)
+  {
     return NAME;
   }
 
   /// For querying owner of token
   /// @param _divCardId The tokenID for owner inquiry
   /// @dev Required for ERC-721 compliance.
-  function ownerOf(uint _divCardId) public view returns (address owner) {
+  function ownerOf(uint _divCardId)
+    public
+    view
+    returns (address owner)
+  {
     owner = divCardIndexToOwner[_divCardId];
     require(owner != address(0));
 	return owner;
   }
 
-  // Allows someone to send ether and obtain the card
-  function purchase(uint _divCardId) public payable hasStarted isNotContract {
-    address oldOwner = divCardIndexToOwner[_divCardId];
-    address newOwner = msg.sender;
+  // Allows someone to send Ether and obtain a card
+  function purchase(uint _divCardId)
+    public
+    payable
+    hasStarted
+    isNotContract
+  {
+    address oldOwner  = divCardIndexToOwner[_divCardId];
+    address newOwner  = msg.sender;
 
     // Get the current price of the card
     uint currentPrice = divCardIndexToPrice[_divCardId];
@@ -219,55 +302,66 @@ contract ZethrDividendCards is ERC721 {
     require(msg.value >= currentPrice);
 
     // To find the total profit, we need to know the previous price
-    // currentPrice = previousPrice * (100 + percentIncrease);
-    // previousPrice = currentPrice / (100 + percentIncrease);
+    // currentPrice      = previousPrice * (100 + percentIncrease);
+    // previousPrice     = currentPrice / (100 + percentIncrease);
     uint percentIncrease = divCards[_divCardId].percentIncrease;
-    uint previousPrice = SafeMath.mul(currentPrice, 100).div(100 + percentIncrease);
+    uint previousPrice   = SafeMath.mul(currentPrice, 100).div(100 + percentIncrease);
 
     // Calculate total profit and allocate 50% to old owner, 50% to bankroll
-    uint totalProfit = SafeMath.sub(currentPrice, previousPrice);
-    uint oldOwnerProfit = SafeMath.div(totalProfit, 2);
-    uint bankrollProfit = SafeMath.sub(totalProfit, oldOwnerProfit);
-    oldOwnerProfit = SafeMath.add(oldOwnerProfit, previousPrice);
+    uint totalProfit     = SafeMath.sub(currentPrice, previousPrice);
+    uint oldOwnerProfit  = SafeMath.div(totalProfit, 2);
+    uint bankrollProfit  = SafeMath.sub(totalProfit, oldOwnerProfit);
+    oldOwnerProfit       = SafeMath.add(oldOwnerProfit, previousPrice);
 
     // Refund the sender the excess he sent
-    uint purchaseExcess = SafeMath.sub(msg.value, currentPrice);
+    uint purchaseExcess  = SafeMath.sub(msg.value, currentPrice);
 
-    // Raise the price by the % specified by the card
+    // Raise the price by the percentage specified by the card
     divCardIndexToPrice[_divCardId] = SafeMath.div(SafeMath.mul(currentPrice, (100 + percentIncrease)), 100);
 
     // Transfer ownership
     _transfer(oldOwner, newOwner, _divCardId);
 
-    // contract hackers BTFO
+    // Using send rather than transfer to prevent contract exploitability.
     BANKROLL.send(bankrollProfit);
     oldOwner.send(oldOwnerProfit);
-
-    // Had to remove this because of "stack too deep" errors
-    //emit TokenSold(_divCardId, currentPrice, divCardIndexToPrice[_divCardId], oldOwner, newOwner, divCards[_divCardId].name);
 
     msg.sender.transfer(purchaseExcess);
   }
 
-  function priceOf(uint _divCardId) public view returns (uint price) {
+  function priceOf(uint _divCardId)
+    public
+    view
+    returns (uint price)
+  {
     return divCardIndexToPrice[_divCardId];
   }
 
-  function setCreator(address _creator) public onlyCreator {
+  function setCreator(address _creator)
+    public
+    onlyCreator
+  {
     require(_creator != address(0));
 
     creator = _creator;
   }
 
   /// @dev Required for ERC-721 compliance.
-  function symbol() public pure returns (string) {
+  function symbol()
+    public
+    pure
+    returns (string)
+  {
     return SYMBOL;
   }
 
-  /// @notice Allow pre-approved user to take ownership of a token
-  /// @param _divCardId The ID of the Token that can be transferred if this call succeeds.
+  /// @notice Allow pre-approved user to take ownership of a dividend card.
+  /// @param _divCardId The ID of the card that can be transferred if this call succeeds.
   /// @dev Required for ERC-721 compliance.
-  function takeOwnership(uint _divCardId) public isNotContract {
+  function takeOwnership(uint _divCardId)
+    public
+    isNotContract
+  {
     address newOwner = msg.sender;
     address oldOwner = divCardIndexToOwner[_divCardId];
 
@@ -282,27 +376,37 @@ contract ZethrDividendCards is ERC721 {
 
   /// For querying totalSupply of token
   /// @dev Required for ERC-721 compliance.
-  function totalSupply() public view returns (uint total) {
+  function totalSupply()
+    public
+    view
+    returns (uint total)
+  {
     return divCards.length;
   }
 
-  /// Owner initates the transfer of the token to another account
-  /// @param _to The address for the token to be transferred to.
-  /// @param _divCardId The ID of the Token that can be transferred if this call succeeds.
+  /// Owner initates the transfer of the card to another account
+  /// @param _to The address for the card to be transferred to.
+  /// @param _divCardId The ID of the card that can be transferred if this call succeeds.
   /// @dev Required for ERC-721 compliance.
-  function transfer(address _to, uint _divCardId) public isNotContract {
+  function transfer(address _to, uint _divCardId)
+    public
+    isNotContract
+  {
     require(_owns(msg.sender, _divCardId));
     require(_addressNotNull(_to));
 
     _transfer(msg.sender, _to, _divCardId);
   }
 
-  /// Third-party initiates transfer of token from address _from to address _to
-  /// @param _from The address for the token to be transferred from.
-  /// @param _to The address for the token to be transferred to.
-  /// @param _divCardId The ID of the Token that can be transferred if this call succeeds.
+  /// Third-party initiates transfer of a card from address _from to address _to
+  /// @param _from The address for the card to be transferred from.
+  /// @param _to The address for the card to be transferred to.
+  /// @param _divCardId The ID of the card that can be transferred if this call succeeds.
   /// @dev Required for ERC-721 compliance.
-  function transferFrom(address _from, address _to, uint _divCardId) public isNotContract {
+  function transferFrom(address _from, address _to, uint _divCardId)
+    public
+    isNotContract
+  {
     require(_owns(_from, _divCardId));
     require(_approved(_to, _divCardId));
     require(_addressNotNull(_to));
@@ -327,17 +431,27 @@ contract ZethrDividendCards is ERC721 {
 
   /*** PRIVATE FUNCTIONS ***/
   /// Safety check on _to address to prevent against an unexpected 0x0 default.
-  function _addressNotNull(address _to) private pure returns (bool) {
+  function _addressNotNull(address _to)
+    private
+    pure
+    returns (bool)
+  {
     return _to != address(0);
   }
 
   /// For checking approval of transfer for address _to
-  function _approved(address _to, uint _divCardId) private view returns (bool) {
+  function _approved(address _to, uint _divCardId)
+    private
+    view
+    returns (bool) 
+  {
     return divCardIndexToApproved[_divCardId] == _to;
   }
 
-  /// For creating a Div Card
-  function _createDivCard(string _name, address _owner, uint _price, uint _percentIncrease) private {
+  /// For creating a dividend card
+  function _createDivCard(string _name, address _owner, uint _price, uint _percentIncrease)
+    private
+  {
     Card memory _divcard = Card({
       name: _name,
       percentIncrease: _percentIncrease
@@ -357,12 +471,18 @@ contract ZethrDividendCards is ERC721 {
   }
 
   /// Check for token ownership
-  function _owns(address claimant, uint _divCardId) private view returns (bool) {
+  function _owns(address claimant, uint _divCardId)
+    private
+    view
+    returns (bool)
+  {
     return claimant == divCardIndexToOwner[_divCardId];
   }
 
   /// @dev Assigns ownership of a specific Card to an address.
-  function _transfer(address _from, address _to, uint _divCardId) private {
+  function _transfer(address _from, address _to, uint _divCardId)
+    private
+  {
     // Since the number of cards is capped to 2^32 we can't overflow this
     ownershipDivCardCount[_to]++;
     //transfer ownership
