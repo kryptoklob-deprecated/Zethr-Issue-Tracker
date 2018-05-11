@@ -1,0 +1,1 @@
+# Zethr Bug Bounty
