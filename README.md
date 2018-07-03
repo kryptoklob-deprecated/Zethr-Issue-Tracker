@@ -15,7 +15,7 @@ When buying tokens, people should be restricted to only the dividend rates speci
 
 When buying tokens during the ICO phase, all dividends should go to the Bankroll (which then buys tokens). When buying tokens NOT during the ICO phase, 1% of all buys should go to the two div-card holders (0.5% each), and 25% of dividends should go to referrers (if they have enough tokens for a masternode).
 
-When transferring tokens, there should be no exploits, and the recipient of the transfer should inherit the average dividend rate of the sender if they have no tokens.
+When transferring tokens, there should be no exploits, and the recipient of the transfer should inherit the average dividend rate of the sender if they have no tokens. We can use the transferTo function to transfer tokens to a contract, which *must* have a token receiving fallback function to then call a function using these tokens - this will be used for games. See: ZethHell and ZethRoll.
 
 ## Zethr Div Cards
 
@@ -26,6 +26,10 @@ When dividend cards are bought, half of the profit should go to the bankroll, an
 Dividend cards should receive 0.5% of every buy value in the main Zethr contract during the regular phase, but nothing during the ICO phase.
 
 Dividend cards should only be activated when an administrator start them.
+
+## ZethHell
+
+## ZethRoll
 
 ## Zethr Bankroll
 
