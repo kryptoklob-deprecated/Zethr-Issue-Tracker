@@ -1,13 +1,70 @@
-pragma solidity 0.4.23;
+pragma solidity ^0.4.23;
 
-contract ZethrBankroll {
+/**
+
+    https://zethr.io https://zethr.io https://zethr.io https://zethr.io https://zethr.io
+
+
+                          ███████╗███████╗████████╗██╗  ██╗██████╗
+                          ╚══███╔╝██╔════╝╚══██╔══╝██║  ██║██╔══██╗
+                            ███╔╝ █████╗     ██║   ███████║██████╔╝
+                           ███╔╝  ██╔══╝     ██║   ██╔══██║██╔══██╗
+                          ███████╗███████╗   ██║   ██║  ██║██║  ██║
+                          ╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+
+
+.------..------.     .------..------..------.     .------..------..------..------..------.
+|B.--. ||E.--. |.-.  |T.--. ||H.--. ||E.--. |.-.  |H.--. ||O.--. ||U.--. ||S.--. ||E.--. |
+| :(): || (\/) (( )) | :/\: || :/\: || (\/) (( )) | :/\: || :/\: || (\/) || :/\: || (\/) |
+| ()() || :\/: |'-.-.| (__) || (__) || :\/: |'-.-.| (__) || :\/: || :\/: || :\/: || :\/: |
+| '--'B|| '--'E| (( )) '--'T|| '--'H|| '--'E| (( )) '--'H|| '--'O|| '--'U|| '--'S|| '--'E|
+`------'`------'  '-'`------'`------'`------'  '-'`------'`------'`------'`------'`------'
+
+An interactive, variable-dividend rate contract with an ICO-capped price floor and collectibles.
+
+Bankroll contract, containing tokens purchased from all dividend-card profit and ICO dividends.
+Acts as token repository for games on the Zethr platform.
+
+
+Credits
+=======
+
+Analysis:
+    blurr
+    Randall
+
+Contract Developers:
+    Etherguy
+    klob
+    Norsefire
+
+Front-End Design:
+    cryptodude
+    oguzhanox
+    TropicalRogue
+
+**/
+
+contract ZTHInterface {
+        function buyAndSetDivPercentage(address _referredBy, uint8 _divChoice, string providedUnhashedPass) public payable returns (uint);
+        function balanceOf(address who) public view returns (uint);
+        function transfer(address _to, uint _value)     public returns (bool);
+        function transferFrom(address _from, address _toAddress, uint _amountOfTokens) public returns (bool);
+        function exit() public;
+        function sell(uint amountOfTokens) public;
+        function withdraw(address _recipient) public;
+}
+
+contract ERC223Receiving {
+    function tokenFallback(address _from, uint _amountOfTokens, bytes _data) public returns (bool);
+}
+
+contract ZethrBankroll is ERC223Receiving {
     using SafeMath for uint;
 
-    uint constant public MAX_OWNER_COUNT = 10;
-    uint constant public MAX_WITHDRAW_PCT_DAILY = 15;
-    uint constant public MAX_WITHDRAW_PCT_TX = 5;
-    
-    uint constant internal resetTimer = 1 days; 
+    /*=================================
+    =              EVENTS            =
+    =================================*/
 
     event Confirmation(address indexed sender, uint indexed transactionId);
     event Revocation(address indexed sender, uint indexed transactionId);
@@ -21,18 +78,50 @@ contract ZethrBankroll {
     event WhiteListRemoval(address indexed contractAddress);
     event RequirementChange(uint required);
     event DevWithdraw(uint amountTotal, uint amountPerPerson);
+    event EtherLogged(uint amountReceived, address sender);
+    event BankrollInvest(uint amountReceived);
+    event DailyTokenAdmin(address gameContract);
+    event DailyTokensSent(address gameContract, uint tokens);
+    event DailyTokensReceived(address gameContract, uint tokens);
+
+    /*=================================
+    =        WITHDRAWAL CONSTANTS     =
+    =================================*/
+
+    uint constant public MAX_OWNER_COUNT = 10;
+    uint constant public MAX_WITHDRAW_PCT_DAILY = 15;
+    uint constant public MAX_WITHDRAW_PCT_TX = 5;
+    uint constant internal resetTimer = 1 days;
+
+    /*=================================
+    =          ZTH INTERFACE          =
+    =================================*/
+
+    address internal zethrAddress;
+    ZTHInterface public ZTHTKN;
+
+    /*=================================
+    =             VARIABLES           =
+    =================================*/
 
     mapping (uint => Transaction) public transactions;
     mapping (uint => mapping (address => bool)) public confirmations;
     mapping (address => bool) public isOwner;
     mapping (address => bool) public isWhitelisted;
+    mapping (address => uint) public dailyTokensPerContract;
+    address internal divCardAddress;
     address[] public owners;
     address[] public whiteListedContracts;
     uint public required;
     uint public transactionCount;
     uint internal dailyResetTime;
-    uint internal dailyLimit;
-    uint internal ethDispensedToday;
+    uint internal dailyTknLimit;
+    uint internal tknsDispensedToday;
+    bool internal reEntered = false;
+
+    /*=================================
+    =         CUSTOM CONSTRUCTS       =
+    =================================*/
 
     struct Transaction {
         address destination;
@@ -41,30 +130,33 @@ contract ZethrBankroll {
         bool executed;
     }
 
+    struct TKN {
+        address sender;
+        uint value;
+    }
+
+    /*=================================
+    =            MODIFIERS            =
+    =================================*/
+
     modifier onlyWallet() {
         if (msg.sender != address(this))
             revert();
         _;
     }
-    
-    modifier onlyWhiteListedContract() {
-        if (!isWhitelisted[msg.sender])
-            revert();
-        _;
-    }
-    
+
     modifier contractIsNotWhiteListed(address contractAddress) {
         if (isWhitelisted[contractAddress])
             revert();
         _;
     }
-    
+
     modifier contractIsWhiteListed(address contractAddress) {
         if (!isWhitelisted[contractAddress])
             revert();
         _;
     }
-    
+
     modifier isAnOwner() {
         address caller = msg.sender;
         if (!isOwner[caller])
@@ -123,17 +215,30 @@ contract ZethrBankroll {
         _;
     }
 
-    /// @dev Fallback function allows to deposit ether.
-    function()
-        public
-        payable
-    {
-        
-    }
-    
+    /*=================================
+    =          LIST OF OWNERS         =
+    =================================*/
+
     /*
-     * Public functions
-     */
+        This list is for reference/identification purposes only, and comprises the eight core Zethr developers.
+        For game contracts to be listed, they must be approved by a majority (i.e. currently five) of the owners.
+        Contracts can be delisted in an emergency by a single owner.
+
+        0x4F4eBF556CFDc21c3424F85ff6572C77c514Fcae // Norsefire
+        0x11e52c75998fe2E7928B191bfc5B25937Ca16741 // klob
+        0x20C945800de43394F70D789874a4daC9cFA57451 // Etherguy
+        0xef764BAC8a438E7E498c2E5fcCf0f174c3E3F8dB // blurr
+        0x8537aa2911b193e5B377938A723D805bb0865670 // oguzhanox
+        0x9D221b2100CbE5F05a0d2048E2556a6Df6f9a6C3 // Randall
+        0x71009e9E4e5e68e77ECc7ef2f2E95cbD98c6E696 // cryptodude
+        0xDa83156106c4dba7A26E9bF2Ca91E273350aa551 // TropicalRogue
+    */
+
+
+    /*=================================
+    =         PUBLIC FUNCTIONS        =
+    =================================*/
+
     /// @dev Contract constructor sets initial owners and required number of confirmations.
     /// @param _owners List of initial owners.
     /// @param _required Number of required confirmations.
@@ -148,42 +253,105 @@ contract ZethrBankroll {
         }
         owners = _owners;
         required = _required;
-        
-        dailyResetTime = now;
+
+        dailyResetTime = now - (1 days);
     }
 
-
-    /// @dev Calculates if an amount of Ether exceeds the aggregate daily limit of 15% of contract
-    ///        balance or 5% of the contract balance on its own.
-    function permissibleWithdrawal(uint _toWithdraw)
+    /** Testing only.
+    function exitAll()
         public
-        onlyWallet
+    {
+        uint tokenBalance = ZTHTKN.balanceOf(address(this));
+        ZTHTKN.sell(tokenBalance - 1e18);
+        ZTHTKN.sell(1e18);
+        ZTHTKN.withdraw(address(0x0));
+    }
+    **/
+
+    function addZethrAddresses(address _zethr, address _divcards)
+        public
+        isAnOwner
+    {
+        zethrAddress   = _zethr;
+        divCardAddress = _divcards;
+        ZTHTKN = ZTHInterface(zethrAddress);
+    }
+
+    /// @dev Fallback function allows Ether to be deposited.
+    function()
+        public
+        payable
+    {
+
+    }
+
+    uint NonICOBuyins;
+
+    function deposit()
+        public
+        payable
+    {
+        NonICOBuyins = NonICOBuyins.add(msg.value);
+    }
+
+    /// @dev Function to buy tokens with contract eth balance.
+    function buyTokens()
+        public
+        payable
+        isAnOwner
+    {
+        uint savings = address(this).balance;
+        if (savings > 0.01 ether) {
+            ZTHTKN.buyAndSetDivPercentage.value(savings)(address(0x0), 33, "");
+            emit BankrollInvest(savings);
+        }
+        else {
+            emit EtherLogged(msg.value, msg.sender);
+        }
+    }
+
+		function tokenFallback(address /*_from*/, uint /*_amountOfTokens*/, bytes /*_data*/) public returns (bool) {
+			// Nothing, for now. Just receives tokens.
+		}	
+
+    /// @dev Calculates if an amount of tokens exceeds the aggregate daily limit of 15% of contract
+    ///        balance or 5% of the contract balance on its own.
+    function permissibleTokenWithdrawal(uint _toWithdraw)
+        public
         returns(bool)
     {
         uint currentTime     = now;
-        uint contractBalance = address(this).balance;
-        uint maxPerTx        = (contractBalance.mul(MAX_WITHDRAW_PCT_TX)).div(100);
-        
+        uint tokenBalance    = ZTHTKN.balanceOf(address(this));
+        uint maxPerTx        = (tokenBalance.mul(MAX_WITHDRAW_PCT_TX)).div(100);
+
         require (_toWithdraw <= maxPerTx);
-        
+
         if (currentTime - dailyResetTime >= resetTimer)
             {
-                dailyResetTime    = currentTime;
-                dailyLimit        = (contractBalance.mul(MAX_WITHDRAW_PCT_DAILY)).div(100);
-                ethDispensedToday = _toWithdraw;
+                dailyResetTime     = currentTime;
+                dailyTknLimit      = (tokenBalance.mul(MAX_WITHDRAW_PCT_DAILY)).div(100);
+                tknsDispensedToday = _toWithdraw;
                 return true;
             }
-        else 
+        else
             {
-                if (ethDispensedToday.add(_toWithdraw) <= dailyLimit)
+                if (tknsDispensedToday.add(_toWithdraw) <= dailyTknLimit)
                     {
-                        ethDispensedToday += _toWithdraw;
+                        tknsDispensedToday += _toWithdraw;
                         return true;
                     }
                 else { return false; }
             }
     }
-    
+
+    /// @dev Allows us to set the daily Token Limit
+    function setDailyTokenLimit(uint limit)
+      public
+      isAnOwner
+    {
+      dailyTknLimit = limit;
+    }
+
     /// @dev Allows to add a new owner. Transaction has to be sent by wallet.
     /// @param owner Address of new owner.
     function addOwner(address owner)
@@ -204,6 +372,7 @@ contract ZethrBankroll {
         public
         onlyWallet
         ownerExists(owner)
+        validRequirement(owners.length, required)
     {
         isOwner[owner] = false;
         for (uint i=0; i<owners.length - 1; i++)
@@ -321,9 +490,10 @@ contract ZethrBankroll {
         }
     }
 
-    /*
-     * Internal functions
-     */
+    /*=================================
+    =        OPERATOR FUNCTIONS       =
+    =================================*/
+
     /// @dev Adds a new transaction to the transaction mapping, if transaction does not exist yet.
     /// @param destination Transaction target address.
     /// @param value Transaction ether value.
@@ -436,15 +606,17 @@ contract ZethrBankroll {
     // Additions for Bankroll
     function whiteListContract(address contractAddress)
         public
-        onlyWallet
+        isAnOwner
         contractIsNotWhiteListed(contractAddress)
         notNull(contractAddress)
     {
         isWhitelisted[contractAddress] = true;
         whiteListedContracts.push(contractAddress);
+        // We set the daily tokens for a particular contract in a separate call.
+        dailyTokensPerContract[contractAddress] = 0;
         emit WhiteListAddition(contractAddress);
     }
-    
+
     // Remove a whitelisted contract. This is an exception to the norm in that
     // it can be invoked directly by any owner, in the event that a game is found
     // to be bugged or otherwise faulty, so it can be shut down as an emergency measure.
@@ -456,51 +628,152 @@ contract ZethrBankroll {
         contractIsWhiteListed(contractAddress)
     {
         isWhitelisted[contractAddress] = false;
-        for (uint i=0; i<whiteListedContracts.length - 1; i++)
+        for (uint i=0; i < whiteListedContracts.length - 1; i++)
             if (whiteListedContracts[i] == contractAddress) {
                 whiteListedContracts[i] = owners[whiteListedContracts.length - 1];
                 break;
             }
-            
+
         whiteListedContracts.length -= 1;
-        
+
         emit WhiteListRemoval(contractAddress);
     }
-    
-    // Legit sweaty palms when writing this
-    // AUDIT AUDIT AUDIT
-    // Should withdraw "amount" to whitelisted contracts only!
-    // Should block withdraws greater than MAX_WITHDRAW_PCT_TX of balance.
-    function contractWithdraw(uint amount) public 
-        onlyWhiteListedContract
+
+     function contractTokenWithdraw(uint amount, address target) public
+        contractIsWhiteListed(msg.sender)
     {
-        // Make sure amount is <= balance*MAX_WITHDRAW_PCT_TX
-        require(permissibleWithdrawal(amount));
-        
-        msg.sender.transfer(amount);
+        require(isWhitelisted[msg.sender]);
+        require(ZTHTKN.transfer(target, amount));
     }
-    
-    // Dev withdraw - splits equally among all owners of contract
-    function devWithdraw(uint amount) public
+
+    // Alters the amount of tokens allocated to a game contract on a daily basis.
+    function alterTokenGrant(address _contract, uint _newAmount)
+        public
+        isAnOwner
+        contractIsWhiteListed(_contract)
+    {
+        dailyTokensPerContract[_contract] = _newAmount;
+    }
+
+    function queryTokenGrant(address _contract)
+        public
+        view
+        returns (uint)
+    {
+        return dailyTokensPerContract[_contract];
+    }
+
+    // Function to be run by an owner (ideally on a cron job) which performs daily
+    // token collection and dispersal for all whitelisted contracts.
+    function dailyAccounting()
+        public
+        isAnOwner
+    {
+        for (uint i=0; i < whiteListedContracts.length; i++)
+            {
+                address _contract = whiteListedContracts[i];
+                if ( dailyTokensPerContract[_contract] > 0 )
+                    {
+                        allocateTokens(_contract);
+                        emit DailyTokenAdmin(_contract);
+                    }
+            }
+    }
+
+    // In the event that we want to manually take tokens back from a whitelisted contract,
+    // we can do so.
+    function retrieveTokens(address _contract, uint _amount)
+        public
+        isAnOwner
+        contractIsWhiteListed(_contract)
+    {
+        require(ZTHTKN.transferFrom(_contract, address(this), _amount));
+    }
+
+    // Dispenses daily amount of ZTH to whitelisted contract, or retrieves the excess.
+    // Block withdraws greater than MAX_WITHDRAW_PCT_TX of Zethr token balance.
+    // (May require occasional adjusting of the daily token allocation for contracts.)
+    function allocateTokens(address _contract)
+        public
+        isAnOwner
+        contractIsWhiteListed(_contract)
+    {
+        uint dailyAmount = dailyTokensPerContract[_contract];
+        uint zthPresent  = ZTHTKN.balanceOf(_contract);
+
+        // Make sure that tokens aren't sent to a contract which is in the black.
+        if (zthPresent <= dailyAmount)
+        {
+            // We need to send tokens over, make sure it's a permitted amount, and then send.
+            uint toDispense  = dailyAmount.sub(zthPresent);
+
+            // Make sure amount is <= tokenbalance*MAX_WITHDRAW_PCT_TX
+            require(permissibleTokenWithdrawal(toDispense));
+
+            require(ZTHTKN.transfer(_contract, toDispense));
+            emit DailyTokensSent(_contract, toDispense);
+        } else
+        {
+            // The contract in question has made a profit: retrieve the excess tokens.
+            uint toRetrieve = zthPresent.sub(dailyAmount);
+            require(ZTHTKN.transferFrom(_contract, address(this), toRetrieve));
+            emit DailyTokensReceived(_contract, toRetrieve);
+
+        }
+        emit DailyTokenAdmin(_contract);
+    }
+
+    // Dev withdrawal of tokens - splits equally among all owners of contract
+    function devTokenWithdraw(uint amount) public
         onlyWallet
     {
-        require(permissibleWithdrawal(amount));        
-        
+        require(permissibleTokenWithdrawal(amount));
+
         uint amountPerPerson = SafeMath.div(amount, owners.length);
-        
+
         for (uint i=0; i<owners.length; i++) {
-            owners[i].transfer(amountPerPerson);
+            ZTHTKN.transfer(owners[i], amountPerPerson);
         }
-        
+
         emit DevWithdraw(amount, amountPerPerson);
     }
-    
-    // Receive dividends from Zethr and buy back in 
 
-    function receiveDividends() public payable {
-        Zethr(msg.sender).buy.value(msg.value)(address(0x0));
+    // Change the dividend card address. Can't see why this would ever need
+    // to be invoked, but better safe than sorry.
+    function changeDivCardAddress(address _newDivCardAddress)
+        public
+        isAnOwner
+    {
+        divCardAddress = _newDivCardAddress;
     }
 
+    // Receive Ether (from Zethr itself or any other source) and purchase tokens at the 33% dividend rate.
+    // If the amount is less than 0.01 Ether, the Ether is stored by the contract until the balance
+    // exceeds that limit and then purchases all it can.
+    function receiveDividends() public payable {
+      if (!reEntered) {
+        uint ActualBalance = (address(this).balance.sub(NonICOBuyins));
+        if (ActualBalance > 0.01 ether) {
+          reEntered = true;
+          ZTHTKN.buyAndSetDivPercentage.value(ActualBalance)(address(0x0), 33, "");
+          emit BankrollInvest(ActualBalance);
+          reEntered = false;
+        }
+      }
+    }
+
+    // Use all available balance to buy in
+    function buyInWithAllBalance() public payable isAnOwner {
+      if (!reEntered) {
+        uint balance = address(this).balance;
+        require (balance > 0.01 ether);
+        ZTHTKN.buyAndSetDivPercentage.value(balance)(address(0x0), 33, ""); 
+      }
+    }
+
+    /*=================================
+    =            UTILITIES            =
+    =================================*/
 
     // Convert an hexadecimal character to their value
     function fromHexChar(uint c) public pure returns (uint) {
@@ -557,7 +830,7 @@ library SafeMath {
     }
 
     /**
-    * @dev Substracts two numbers, throws on overflow (i.e. if subtrahend is greater than minuend).
+    * @dev Subtracts two numbers, throws on overflow (i.e. if subtrahend is greater than minuend).
     */
     function sub(uint a, uint b) internal pure returns (uint) {
         assert(b <= a);
@@ -572,10 +845,4 @@ library SafeMath {
         assert(c >= a);
         return c;
     }
-}
-
-contract Zethr{
-        function buy(address)
-        public
-        payable {}
 }
