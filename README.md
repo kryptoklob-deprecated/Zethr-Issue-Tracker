@@ -29,7 +29,11 @@ Dividend cards should only be activated when an administrator start them.
 
 ## ZethHell
 
+WIP.
+
 ## ZethRoll
+
+WIP.
 
 ## Zethr Bankroll
 
