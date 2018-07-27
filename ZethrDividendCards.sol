@@ -55,7 +55,7 @@ contract ERC721 {
 
   event Transfer(address indexed from, address indexed to, uint tokenId);
   event Approval(address indexed owner, address indexed approved, uint tokenId);
-  
+
 }
 
 contract ZethrDividendCards is ERC721 {
@@ -84,35 +84,35 @@ contract ZethrDividendCards is ERC721 {
 
   /// @dev A mapping from dividend card indices to the address that owns them.
   ///  All dividend cards have a valid owner address.
-  
+
   mapping (uint => address) public      divCardIndexToOwner;
 
   // A mapping from a dividend rate to the card index.
-  
+
   mapping (uint => uint) public         divCardRateToIndex;
 
-  // @dev A mapping from owner address to the number of dividend cards that address owns.  
+  // @dev A mapping from owner address to the number of dividend cards that address owns.
   //  Used internally inside balanceOf() to resolve ownership count.
-  
+
   mapping (address => uint) private     ownershipDivCardCount;
 
   /// @dev A mapping from dividend card indices to an address that has been approved to call
   ///  transferFrom(). Each dividend card can only have one approved address for transfer
   ///  at any time. A zero value means no approval is outstanding.
-  
+
   mapping (uint => address) public      divCardIndexToApproved;
 
   // @dev A mapping from dividend card indices to the price of the dividend card.
-  
+
   mapping (uint => uint) private        divCardIndexToPrice;
-  
+
   mapping (address => bool) internal    administrators;
 
   address public                        creator;
   bool    public                        onSale;
 
   /*** DATATYPES ***/
-  
+
   struct Card {
     string name;
     uint percentIncrease;
@@ -153,8 +153,8 @@ contract ZethrDividendCards is ERC721 {
     createDivCard("MASTER", 5 ether, 10);
     divCardRateToIndex[999] = 7;
 
-	onSale = false;		
-		
+	onSale = false;
+
     administrators[0x4F4eBF556CFDc21c3424F85ff6572C77c514Fcae] = true; // Norsefire
     administrators[0x11e52c75998fe2E7928B191bfc5B25937Ca16741] = true; // klob
     administrators[0x20C945800de43394F70D789874a4daC9cFA57451] = true; // Etherguy
@@ -167,7 +167,7 @@ contract ZethrDividendCards is ERC721 {
     // Modifier to prevent contracts from interacting with the flip cards
     modifier isNotContract()
     {
-        require (AddressUtils.isContract(msg.sender) == false);
+        require (msg.sender == tx.origin);
         _;
     }
 
@@ -177,7 +177,7 @@ contract ZethrDividendCards is ERC721 {
 		require (onSale == true);
 		_;
 	}
-	
+
 	modifier isAdmin()
     {
 	    require(administrators[msg.sender]);
@@ -187,19 +187,19 @@ contract ZethrDividendCards is ERC721 {
   /*** PUBLIC FUNCTIONS ***/
   // Administrative update of the bankroll contract address
     function setBankroll(address where)
-        isAdmin 
+        isAdmin
     {
         BANKROLL = where;
     }
-    
+
   /// @notice Grant another address the right to transfer token via takeOwnership() and transferFrom().
   /// @param _to The address to be granted transfer approval. Pass address(0) to
   ///  clear all approvals.
   /// @param _tokenId The ID of the Token that can be transferred if this call succeeds.
   /// @dev Required for ERC-721 compliance.
   function approve(address _to, uint _tokenId)
-    public 
-    isNotContract 
+    public
+    isNotContract
   {
     // Caller must own token.
     require(_owns(msg.sender, _tokenId));
@@ -213,8 +213,8 @@ contract ZethrDividendCards is ERC721 {
   /// @param _owner The address for balance query
   /// @dev Required for ERC-721 compliance.
   function balanceOf(address _owner)
-    public 
-    view 
+    public
+    view
     returns (uint balance)
   {
     return ownershipDivCardCount[_owner];
@@ -443,7 +443,7 @@ contract ZethrDividendCards is ERC721 {
   function _approved(address _to, uint _divCardId)
     private
     view
-    returns (bool) 
+    returns (bool)
   {
     return divCardIndexToApproved[_divCardId] == _to;
   }
