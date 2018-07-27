@@ -3,6 +3,10 @@ Zethr Bug Bounty
 
 Here you can find the Zeth contracts, along with the suite of Truffle tests we use to catch bugs as we develop.
 
+## Truffle Tests
+
+You can view our truffle test setup in the /truffle folder. There, you can see all of the 50+ tests we have for Zethr and its subsystems. Feel free to run them on your own!
+
 ## Zethr Main Contract
 
 This is the main Zethr contract, and probably the most prone to bugs. When created, it should not allow any buys or sells. Once the devs (administrators) launch the ICO phase, buys should be allowed, but not sells. Buys are restricted by a password provided by the admins on the main Zethr website (https://zethr.io), but only during the ICO phase.
