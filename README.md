@@ -3,14 +3,14 @@ Zethr Issue Tracker
 
 If you find an issue, please report it on the "Issues" tab above.
 
+Below you can find info about the contracts, but this github will mainly be used as the public issue tracker for Zethr.
 
-
-
-
-
-
-
-
+--
+--
+--
+--
+--
+--
 
 # Zethr Contract Info
 
