@@ -1,6 +1,13 @@
 Zethr Issue Tracker
 ================
 
+If you find an issue, please report it on the "Issues" tab above.
+
+
+
+
+
+
 
 
 
