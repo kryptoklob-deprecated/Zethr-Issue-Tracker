@@ -1,6 +1,12 @@
 Zethr Issue Tracker
 ================
 
+
+
+
+
+# Zethr Contract Info
+
 Here you can find the Zethr contracts, along with the suite of Truffle tests we use to catch bugs as we develop.
 
 ## Truffle Tests
