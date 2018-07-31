@@ -1,7 +1,7 @@
-Zethr Bug Bounty
+Zethr Issue Tracker
 ================
 
-Here you can find the Zeth contracts, along with the suite of Truffle tests we use to catch bugs as we develop.
+Here you can find the Zethr contracts, along with the suite of Truffle tests we use to catch bugs as we develop.
 
 ## Truffle Tests
 
@@ -33,11 +33,11 @@ Dividend cards should only be activated when an administrator start them.
 
 ## ZethHell
 
-WIP.
+Penny-auction style game.
 
 ## ZethRoll
 
-WIP.
+Dice game, akin to Etheroll.
 
 ## Zethr Bankroll
 
